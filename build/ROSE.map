@@ -202,6 +202,14 @@ Discarded input sections
                 0x00000000        0xc build/src/drive.o
  .ARM.exidx.text._Z4getYv
                 0x00000000        0x8 build/src/drive.o
+ .text._Z12tuneMotorKFSv
+                0x00000000      0x140 build/src/drive.o
+ .ARM.exidx.text._Z12tuneMotorKFSv
+                0x00000000        0x8 build/src/drive.o
+ .text._Z12tuneMotorKFFv
+                0x00000000        0x4 build/src/drive.o
+ .ARM.exidx.text._Z12tuneMotorKFFv
+                0x00000000        0x8 build/src/drive.o
  .llvm_addrsig  0x00000000       0x22 build/src/drive.o
  .text          0x00000000        0x0 build/src/robot-config.o
  .llvm_addrsig  0x00000000        0x5 build/src/robot-config.o

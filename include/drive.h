@@ -67,4 +67,7 @@ float getY();
 float getAngle();
 float getShortestAngleTo(float deg);
 
+// Calibration
+void tuneMotorKFS();
+
 #endif

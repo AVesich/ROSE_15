@@ -366,3 +366,30 @@ float getX() {
 float getY() {
     return -1;
 }
+
+// Calibration
+void tuneMotorKFS() {
+    const float thresh = 10.0;
+    float speed = 0.0;
+    float dist = 0.0;
+
+    drive_mode = MANUAL;
+    while (dist < thresh) {
+        speed += 0.5;
+        dist = 0.0;
+
+        driveLeft(speed);
+        driveRight(speed);
+        wait(1000, msec);
+        resetDrive();
+
+        dist = (left_group.position(rotationUnits::deg)+right_group.position(rotationUnits::deg))/2.0;
+    }
+
+    Brain.Screen.clearScreen();
+    Brain.Screen.print(speed); // Tuned kFS
+}
+
+void tuneMotorKFF() {
+    
+}
