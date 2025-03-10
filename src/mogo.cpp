@@ -1,7 +1,5 @@
 #include "vex.h"
 
-pneumatics mogoSolenoid = pneumatics(MOGO_SOLENOID);
-
 bool grabbing = false;
 void grabMogo() {
     if (grabbing) return;
@@ -18,9 +16,7 @@ void dropMogo() {
 }
 
 void mogoOp() {
-    if (Controller.ButtonR1.pressing()) {
-        grabMogo();
-    } else if (Controller.ButtonR2.pressing()) {
-        dropMogo();
-    }
+    if (Controller.ButtonL1.pressing()) {
+        grabbing ? dropMogo() : grabMogo();
+    } 
 }

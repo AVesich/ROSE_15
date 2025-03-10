@@ -12,9 +12,6 @@
 #define RIGHT_4 PORT19
 #define INTAKE PORT1
 #define HOOKS PORT15
-// #define BOTTOM_RING_FINDER Brain.ThreeWirePort.A
-#define INTAKE_SOLENOID Brain.ThreeWirePort.A
-#define MOGO_SOLENOID Brain.ThreeWirePort.B
 #define IMU PORT20
 
 #endif

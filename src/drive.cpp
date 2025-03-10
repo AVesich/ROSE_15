@@ -1,11 +1,11 @@
 #include "vex.h"
 
 // Motors
-motor left1 = motor(LEFT_1, DRIVE_RATIO, false);
+motor left1 = motor(LEFT_1, DRIVE_RATIO, true);
 motor left2 = motor(LEFT_2, DRIVE_RATIO, false);
-motor left3 = motor(LEFT_3, DRIVE_RATIO, false);
-motor left4 = motor(LEFT_4, DRIVE_RATIO, false);
-motor right1 = motor(RIGHT_1, DRIVE_RATIO, false);
+motor left3 = motor(LEFT_3, DRIVE_RATIO, true);
+motor left4 = motor(LEFT_4, DRIVE_RATIO, true);
+motor right1 = motor(RIGHT_1, DRIVE_RATIO, true);
 motor right2 = motor(RIGHT_2, DRIVE_RATIO, false);
 motor right3 = motor(RIGHT_3, DRIVE_RATIO, false);
 motor right4 = motor(RIGHT_4, DRIVE_RATIO, false);
@@ -29,18 +29,18 @@ float left_speed= 0.0, right_speed = 0.0;
 
 // Manual Control
 void driveLeft(float pct) {
-    left_speed = pct; // Motors use PID to reach this speed in motorControl()
+    left_group.spin(fwd, 120*pct, voltageUnits::mV);
 }
 
 void driveRight(float pct) {
-    right_speed = pct; // Motors use PID to reach this speed in motorControl()
+    right_group.spin(fwd, 120*pct, voltageUnits::mV);
 }
 
 // Operator Control
 void driveOp() {
     drive_mode = MANUAL;
     // Make the drivetrain move
-    singleArcadeDrive();
+    tankDrive();
 }
 
 float driftCorrection(float stickValue) {
@@ -56,11 +56,11 @@ void singleArcadeDrive() {
 }
 
 void tankDrive() {
-    float left = driftCorrection(Controller.Axis3.value());
-    float right = driftCorrection(Controller.Axis2.value());
+    // float left = driftCorrection(Controller.Axis3.value());
+    // float right = driftCorrection(Controller.Axis2.value());
 
-    driveLeft(left);
-    driveRight(right);
+    driveLeft(Controller.Axis3.value());//left);
+    driveRight(Controller.Axis2.value());//right);
 }
 
 // Motor Control, uses feed-forward + PID
@@ -76,23 +76,25 @@ int motorControl(float* target, motor motors[DRIVE_MOTOR_SIDE_COUNT]) {
     float error = 0;
     float ff_baseline, actual, prev_error, speed_boost;
 
-    while(1) {
-        for (int i=0; i<DRIVE_MOTOR_SIDE_COUNT; i++) {
-            wait(20, sec);
-            if (drive_mode == MANUAL) {
-                speed_boost = 0;
-                continue; // Disable PID for driving
-            }
+    // while(1) {
+    //     Brain.Screen.print("controlling");
+    //     for (int i=0; i<DRIVE_MOTOR_SIDE_COUNT; i++) {
+    //         if (drive_mode == MANUAL) {
+    //             speed_boost = 0;
+    //             continue; // Disable PID for driving
+    //         }
 
-            ff_baseline = motor_kFS + (*target)*motor_kFF;
-            actual = motors[i].velocity(percentUnits::pct);
-            prev_error = error;
-            error = left_speed-actual;
-            speed_boost = motor_kP*error + motor_kD*prev_error;
+    //         ff_baseline = motor_kFS + (*target)*motor_kFF;
+    //         actual = motors[i].velocity(percentUnits::pct);
+    //         prev_error = error;
+    //         error = left_speed-actual;
+    //         speed_boost = motor_kP*error + motor_kD*prev_error;
     
-            motors[i].spin(fwd, 120*ff_baseline+speed_boost, voltageUnits::mV);
-        }
-    }
+    //         motors[i].spin(fwd, 120*ff_baseline+speed_boost, voltageUnits::mV);
+    //     }
+
+    //     wait(20, msec);
+    // }
 
     return 0;
 }

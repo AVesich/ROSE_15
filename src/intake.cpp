@@ -3,9 +3,6 @@
 // Motors
 motor intake = motor(INTAKE, ratio6_1);
 
-// Pneumatics
-pneumatics intakeSolenoid = pneumatics(INTAKE_SOLENOID);
-
 void moveIntake(float pct) {
     intake.spin(fwd, pct*120, voltageUnits::mV);
 }
@@ -14,21 +11,21 @@ bool lowered = false;
 void liftIntake() {
     if (!lowered) return;
 
-    intakeSolenoid.close();
+    // intakeSolenoid.close();
     lowered = false;
 }
 
 void dropIntake() {
     if (lowered) return;
 
-    intakeSolenoid.open();
+    // intakeSolenoid.open();
     lowered = true;
 }
 
 void intakeOp() {
-    if (Controller.ButtonL1.pressing()) {
+    if (Controller.ButtonR1.pressing()) {
         moveIntake(100);
-    } else if (Controller.ButtonL2.pressing()) {
+    } else if (Controller.ButtonR2.pressing()) {
         moveIntake(-60);
     } else {
         intake.stop();
