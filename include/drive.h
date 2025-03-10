@@ -13,6 +13,7 @@
 #define IN          *(360.0/(WHEEL_DIAM * M_PI))*TICKS_PER_DEG_K // Inches conversion for going straight
 #define DRIVE_THRESH 4.0 // Maximium drive change to be considered "driving"
 #define TURN_THRESH 0.3 // Degree distance from turn target that can be defined as "done" turning
+#define MAX_SETTLE_COUNT 4 // The number of 20ms ticks that a threshold must be met to define the robot as "settled"
 #define WHEEL_SPACING  // Space between the wheels in inches
 
 enum DriveMode {

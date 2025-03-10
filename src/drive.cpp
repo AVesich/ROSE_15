@@ -316,7 +316,6 @@ void setBrake(brakeType mode) {
     right_group.setStopping(mode);
 }
 
-const int DONE_SETTLING_COUNT = 4;
 bool hasSettled()  {
     float curr_position;
 
@@ -339,7 +338,7 @@ bool hasSettled()  {
         return true;
     }
 
-    return settle_count>DONE_SETTLING_COUNT ? true : false;
+    return settle_count>MAX_SETTLE_COUNT ? true : false;
 }
 
 float leftDeg() { 
