@@ -56,11 +56,11 @@ void singleArcadeDrive() {
 }
 
 void tankDrive() {
-    // float left = driftCorrection(Controller.Axis3.value());
-    // float right = driftCorrection(Controller.Axis2.value());
+    float left = driftCorrection(Controller.Axis3.value());
+    float right = driftCorrection(Controller.Axis2.value());
 
-    driveLeft(Controller.Axis3.value());//left);
-    driveRight(Controller.Axis2.value());//right);
+    driveLeft(left);
+    driveRight(right);
 }
 
 // Motor Control, uses feed-forward + PID
@@ -76,25 +76,25 @@ int motorControl(float* target, motor motors[DRIVE_MOTOR_SIDE_COUNT]) {
     float error = 0;
     float ff_baseline, actual, prev_error, speed_boost;
 
-    // while(1) {
-    //     Brain.Screen.print("controlling");
-    //     for (int i=0; i<DRIVE_MOTOR_SIDE_COUNT; i++) {
-    //         if (drive_mode == MANUAL) {
-    //             speed_boost = 0;
-    //             continue; // Disable PID for driving
-    //         }
+    while(1) {
+        Brain.Screen.print("controlling");
+        for (int i=0; i<DRIVE_MOTOR_SIDE_COUNT; i++) {
+            if (drive_mode == MANUAL) {
+                speed_boost = 0;
+                continue; // Disable PID for driving
+            }
 
-    //         ff_baseline = motor_kFS + (*target)*motor_kFF;
-    //         actual = motors[i].velocity(percentUnits::pct);
-    //         prev_error = error;
-    //         error = left_speed-actual;
-    //         speed_boost = motor_kP*error + motor_kD*prev_error;
+            ff_baseline = motor_kFS + (*target)*motor_kFF;
+            actual = motors[i].velocity(percentUnits::pct);
+            prev_error = error;
+            error = left_speed-actual;
+            speed_boost = motor_kP*error + motor_kD*prev_error;
     
-    //         motors[i].spin(fwd, 120*ff_baseline+speed_boost, voltageUnits::mV);
-    //     }
+            motors[i].spin(fwd, 120*ff_baseline+speed_boost, voltageUnits::mV);
+        }
 
-    //     wait(20, msec);
-    // }
+        wait(20, msec);
+    }
 
     return 0;
 }
@@ -111,10 +111,12 @@ int rightControl() {
 // NOTE: ALL PID-BASED AUTONOMOUS MOVEMENTS SHOULD AUTOMATICALLY FLIP FOR OTHER SIDE
 bool slewEnabled;
 float straightTarget = 0.0;
+float holdAngle = 0.0;
 float turnTarget = 0.0;
 void setStraightTarget(float target) {
     drive_mode = STRAIGHT;
     straightTarget = target;
+    holdAngle = getAngle();
     settle_count = 0;
 }
 
@@ -161,6 +163,7 @@ int straightPID() {
     float currErr;
     float prevErr;
     float totalErr = 0.0;
+    float angle_error;
 
     while(1) {
         wait(20, msec);
@@ -185,10 +188,11 @@ int straightPID() {
         // Adjust sides if necessary
         // Subtract a number proportional to the amount a side is ahead when the sides are offset.
         // This prevents the issue of telling the drive to go at max speed and thus, the slower side being unable to speed up.
-        if (leftTicks > rightTicks) {
-            left_speed -= ((leftTicks - rightTicks) * kAlign);
-        } else if (rightTicks > leftTicks) {
-            right_speed -= ((rightTicks - leftTicks) * kAlign);
+        angle_error = getShortestAngleTo(holdAngle);
+        if (angle_error > TURN_THRESH) { // Drifted to the left
+            right_speed -= (angle_error * kAlign);
+        } else if (angle_error < -TURN_THRESH) { // Drifted to the right
+            left_speed -= (fabs(angle_error) * kAlign);
         }
 
         if (slewEnabled) {
@@ -217,7 +221,7 @@ int turnPID() {
     const float kP = 0.0;
     const float kI = 0.0;
     const float kD = 0.0;
-    float currAngleErr = getShortestAngleTo(turnTarget);
+    float currAngleErr = getShortestAngleTo(reversed ? 360.0-turnTarget : turnTarget);
     float prevAngleErr = currAngleErr;
     float totAngleErr = 0.0;
 
@@ -225,7 +229,7 @@ int turnPID() {
         wait(20, msec);
         if (drive_mode != TURN) continue;
 
-        currAngleErr = getShortestAngleTo(turnTarget);
+        currAngleErr = getShortestAngleTo(reversed ? 360.0-turnTarget : turnTarget);
         currAngleErr *= (reversed ? -1 : 1);
         totAngleErr += prevAngleErr-currAngleErr;
         prevAngleErr = currAngleErr;
@@ -286,6 +290,7 @@ void reverse() {
 void resetDrive() {
     drive_mode = MANUAL; // Prevent target resets from making the bot move
     straightTarget = 0;
+    holdAngle = getAngle();
     turnTarget = getAngle(); // target == where we currently are
     last_position = 0; // Used for stopping
     stopDrive();
@@ -312,8 +317,6 @@ void setBrake(brakeType mode) {
     right_group.setStopping(mode);
 }
 
-const float DRIVE_DONE_THRESH = 4.0; // Maximium drive change to be considered "driving"
-const float TURN_DONE_THRESH = 0.3; // Degree distance from turn target that can be defined as "done" turning
 const int DONE_SETTLING_COUNT = 4;
 bool hasSettled()  {
     float curr_position;
@@ -321,15 +324,15 @@ bool hasSettled()  {
     if (drive_mode == STRAIGHT) {
         curr_position = leftDeg();
         
-        if (fabs(last_position-curr_position) < DRIVE_DONE_THRESH)
+        if (fabs(last_position-curr_position) < DRIVE_THRESH)
             settle_count++;
         else
             settle_count = 0;
             last_position = curr_position;
     } else if (drive_mode == TURN) {
-        curr_position = getShortestAngleTo(turnTarget);
+        curr_position = getShortestAngleTo(reversed ? 360.0-turnTarget : turnTarget);
 
-        if (fabs(curr_position) < TURN_DONE_THRESH)
+        if (fabs(curr_position) < TURN_THRESH)
             settle_count++;
         else 
             settle_count = 0;
@@ -353,7 +356,6 @@ float getAngle() {
 }
 
 float getShortestAngleTo(float deg) {
-    deg = reversed ? 360.0-deg : deg; // Automatically flip drive when on the reversed side
     return fmod((deg-getAngle()+540.0), 360.0)-180.0;
 }
 
@@ -365,4 +367,3 @@ float getX() {
 float getY() {
     return -1;
 }
-

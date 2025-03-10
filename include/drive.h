@@ -6,11 +6,13 @@
 #define DRIVE_RATIO ratio6_1
 #define DRIVE_MOTOR_SIDE_COUNT 4
 
-#define WHEEL_DIAM  4.0 // Wheel diameter in inches
+#define WHEEL_DIAM  2.75 // Wheel diameter in inches
 #define MAX_SPEED   95.0 // Maximum speed for autonomous operation, 95 provides ceiling for side adjustment
 #define MIN_SPEED   5.0 // Minimum speed for autonomous operations
-#define TICKS_PER_DEG_K 1.0 // Constant for straight movements
+#define TICKS_PER_DEG_K 2.3 // Constant for straight movements
 #define IN          *(360.0/(WHEEL_DIAM * M_PI))*TICKS_PER_DEG_K // Inches conversion for going straight
+#define DRIVE_THRESH 4.0 // Maximium drive change to be considered "driving"
+#define TURN_THRESH 0.3 // Degree distance from turn target that can be defined as "done" turning
 #define WHEEL_SPACING  // Space between the wheels in inches
 
 enum DriveMode {
