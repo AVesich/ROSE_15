@@ -5,8 +5,14 @@ using namespace vex;
 // A global instance of competition
 competition Competition;
 
+
+task left_drive;
+task right_drive;
 void pre_auton(void) {
     vexcodeInit();
+
+    left_drive = task(leftControl);
+    right_drive = task(rightControl);
 }
 
 void usercontrol(void) {
@@ -24,6 +30,10 @@ void usercontrol(void) {
 
         wait(10, msec);
     }
+
+    left_drive.stop();
+    right_drive.stop();
+    resetDrive();
 }
 
 int main() {
