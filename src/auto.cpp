@@ -52,20 +52,22 @@ void zionsvilleSkills_AllyStake() {
     dropMogo();
 }
 
-// task straightTask;
-// task turnTask;
-// task intakeTask;
-// task left_drive;
-// task right_drive;
+task straightTask;
+task turnTask;
+task intakeTask;
+task left_drive;
+task right_drive;
 
 void test() {    
-    // straightTask = task(straightPID);
-    // turnTask = task(turnPID);
-    // intakeTask = task(autoIntake);
-    // left_drive = task(leftControl);
-    // right_drive = task(rightControl);
+    straightTask = task(straightPID);
+    turnTask = task(turnPID);
+    intakeTask = task(autoIntake);
+    left_drive = task(leftControl);
+    right_drive = task(rightControl);
 
-    // disableIntake();
+    disableIntake();
+    calibrate();
+
     drive(12 IN);
     // turn(90);
     // turn(270.0);
@@ -73,11 +75,11 @@ void test() {
     // wait(1000, msec);
     // disableIntake();
     
-    // straightTask.stop();
-    // turnTask.stop();
-    // intakeTask.stop();
-    // left_drive.stop();
-    // right_drive.stop();
+    straightTask.stop();
+    turnTask.stop();
+    intakeTask.stop();
+    left_drive.stop();
+    right_drive.stop();
 }
 
 // Run the desired auto using auton selector

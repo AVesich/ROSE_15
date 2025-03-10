@@ -64,36 +64,34 @@ void tankDrive() {
 }
 
 // Motor Control, uses feed-forward + PID
-const float motor_kFS = 0.0; // Feedforward static is min speed to start moving
-const float motor_kFF = 0.0; // Feedforward constant provides a common speed boost required across all power levels
-const float motor_kP = 1.5;
+const float motor_kFS = 5.0; // Feedforward static is min speed to start moving
+const float motor_kFF = 0.3; // Feedforward constant provides a common speed boost required across all power levels
+const float motor_kP = 0.25;
 // motor_kI is omitted because it shouldn't be needed and total err would need a reset upon every new target speed to avoid tot_err reaching inf
 const float motor_kD = 0.1;
-motor left_motors[DRIVE_MOTOR_SIDE_COUNT] = {left1, left2, left3, left4};
-motor right_motors[DRIVE_MOTOR_SIDE_COUNT] = {right1, right2, right3, right4};
+motor* left_motors[DRIVE_MOTOR_SIDE_COUNT] = {&left1, &left2, &left3, &left4};
+motor* right_motors[DRIVE_MOTOR_SIDE_COUNT] = {&right1, &right2, &right3, &right4};
 
-int motorControl(float* target, motor motors[DRIVE_MOTOR_SIDE_COUNT]) {
+using one_side_motors = motor*[DRIVE_MOTOR_SIDE_COUNT];
+int motorControl(float* target, one_side_motors& motors) {
     float error = 0;
     float ff_baseline, actual, prev_error, speed_boost;
 
     while(1) {
-        Brain.Screen.print("controlling");
-        for (int i=0; i<DRIVE_MOTOR_SIDE_COUNT; i++) {
-            if (drive_mode == MANUAL) {
-                speed_boost = 0;
-                continue; // Disable PID for driving
-            }
+        wait(20, msec);
+        if (drive_mode == MANUAL) {
+            continue; // Disable PID for driving
+        }
 
+        for (int i=0; i<DRIVE_MOTOR_SIDE_COUNT; i++) {
             ff_baseline = motor_kFS + (*target)*motor_kFF;
-            actual = motors[i].velocity(percentUnits::pct);
+            actual = (*motors[i]).velocity(percentUnits::pct);
             prev_error = error;
             error = left_speed-actual;
             speed_boost = motor_kP*error + motor_kD*prev_error;
     
-            motors[i].spin(fwd, 120*ff_baseline+speed_boost, voltageUnits::mV);
+            (*motors[i]).spin(fwd, 120*(ff_baseline+speed_boost), voltageUnits::mV);
         }
-
-        wait(20, msec);
     }
 
     return 0;
@@ -109,7 +107,7 @@ int rightControl() {
 
 // PID autonomous
 // NOTE: ALL PID-BASED AUTONOMOUS MOVEMENTS SHOULD AUTOMATICALLY FLIP FOR OTHER SIDE
-bool slewEnabled;
+bool slewEnabled = false;
 float straightTarget = 0.0;
 float holdAngle = 0.0;
 float turnTarget = 0.0;
@@ -153,10 +151,10 @@ float slewSpeed(float prevTargetSpeed, float targetSpeed) { // Limits accel + ma
 }
 
 int straightPID() {
-    const float kP = 0.0;
+    const float kP = 0.1;
     const float kI = 0.0;
-    const float kD = 0.0;
-    const float kAlign = 0.0;
+    const float kD = 0.05;
+    const float kAlign = 3.0;
     
     float leftTicks = 0.0;      // Left current degrees of the robot
     float rightTicks = 0.0;     // Right current degrees of the robot
@@ -196,12 +194,12 @@ int straightPID() {
         }
 
         if (slewEnabled) {
-            driveLeft(slewSpeed(prev_left_speed, left_speed));
-            driveRight(slewSpeed(prev_right_speed, right_speed));
-        } else {
-            driveLeft(left_speed);
-            driveRight(right_speed);
+            left_speed = slewSpeed(prev_left_speed, left_speed);
+            right_speed = slewSpeed(prev_right_speed, right_speed);
         }
+
+        Brain.Screen.print(left_speed);
+        Brain.Screen.print(right_speed);
     }
 
     return 0;
@@ -278,6 +276,7 @@ void driveTo(float x, float y) {
 
 // Utility methods
 void calibrate() {
+    drive_mode = MANUAL;
     imu.calibrate();
 
     while (imu.isCalibrating()) wait(20, msec);

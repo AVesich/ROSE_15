@@ -52,6 +52,7 @@ void scurve(float xDist, float yDist); // The direction provided is the way it e
 void driveTo(float x, float y);
 
 // Utility methods
+void calibrate();
 void reverse();
 void resetDrive();
 void stopDrive();

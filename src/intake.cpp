@@ -43,6 +43,11 @@ bool stopIntake = false;
 int autoIntake() {
     while(1) {
         wait(20, msec);
+        if (stopIntake) {
+            moveIntake(0);
+            moveHooks(0);
+            continue;
+        }
 
         moveIntake(100);
         moveHooks(80);
