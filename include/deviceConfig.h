@@ -1,10 +1,6 @@
 #ifndef PORTS_H
 #define PORTS_H
 
-// Misc
-#define DRIVE_RATIO ratio6_1
-#define DRIVE_MOTOR_COUNT 8
-
 // Ports
 #define LEFT_1 PORT11
 #define LEFT_2 PORT12
