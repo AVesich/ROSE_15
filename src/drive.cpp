@@ -386,14 +386,31 @@ void tuneMotorKFS() {
     }
 
     Brain.Screen.clearScreen();
-    Brain.Screen.print(speed); // Tuned kFS
+    Brain.Screen.print("Tuned motor kFS: %f", speed); // Tuned kFS
+}
+
+float leastSquareRegressionSlope(const float x_values[], const float y_values[], int num_values) {
+    float x_avg = 0.0, y_avg = 0.0;
+    for (int i=0; i<num_values; i++) {
+        x_avg += x_values[i];
+        y_avg += y_values[i];
+    }
+    x_avg /= num_values;
+    y_avg /= num_values;
+
+    float numerator_sum = 0.0, denominator_sum = 0.0;
+    for (int i=0; i<11; i++) {
+        numerator_sum += (x_values[i] - x_avg) * (y_values[i] - y_avg);
+        denominator_sum += pow((x_values[i] - x_avg), 2.0);
+    }
+
+    return numerator_sum/denominator_sum;
 }
 
 void tuneMotorKFF() {
-    const float velocities[11] = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-    float kFFs[11] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    const float velocities[10] = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90}; // Stop at 90 since inability to reach perfect 100 will lead to driving forever
+    float kFFs[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     float speed = 0.0;
-    float dist = 0.0;
 
     drive_mode = MANUAL;
     for (int i=0; i<11; i++) {
@@ -413,21 +430,6 @@ void tuneMotorKFF() {
     }
 
     // Find slope of line of best fit for overall kFF using least square method
-    // Treat velo as X and kFF as Y
-    float x_avg = 0.0, y_avg = 0.0;
-    for (int i=0; i<11; i++) {
-        x_avg += velocities[i];
-        y_avg += kFFs[i];
-    }
-    x_avg /= 11;
-    y_avg /= 11;
-
-    float numerator_sum = 0.0, denominator_sum = 0.0;
-    for (int i=0; i<11; i++) {
-        numerator_sum += (velocities[i] - x_avg) * (kFFs[i] - y_avg);
-        denominator_sum += pow((velocities[i] - x_avg), 2.0);
-    }
-
     Brain.Screen.clearScreen();
-    Brain.Screen.print(numerator_sum/denominator_sum); // Tuned kFF
+    Brain.Screen.print("Tuned motor kFF: %f", leastSquareRegressionSlope(velocities, kFFs, 10)); // Tuned kFF
 }
