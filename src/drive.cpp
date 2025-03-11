@@ -379,7 +379,7 @@ void tuneMotorKFS() {
 
         driveLeft(speed);
         driveRight(speed);
-        wait(1000, msec);
+        wait(500, msec);
         resetDrive();
 
         dist = (left_group.position(rotationUnits::deg)+right_group.position(rotationUnits::deg))/2.0;
@@ -390,5 +390,44 @@ void tuneMotorKFS() {
 }
 
 void tuneMotorKFF() {
-    
+    const float velocities[11] = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+    float kFFs[11] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    float speed = 0.0;
+    float dist = 0.0;
+
+    drive_mode = MANUAL;
+    for (int i=0; i<11; i++) {
+        speed = velocities[i] - 0.5;
+
+        while ((left_group.velocity(percentUnits::pct) < velocities[i]) &&
+               (right_group.velocity(percentUnits::pct) < velocities[i])) {
+            speed += 0.5;
+            driveLeft(speed);
+            driveRight(speed);
+            wait(20, msec);
+        }
+        stopDrive();
+
+        kFFs[i] = speed/velocities[i];
+        wait(1000, msec);
+    }
+
+    // Find slope of line of best fit for overall kFF using least square method
+    // Treat velo as X and kFF as Y
+    float x_avg = 0.0, y_avg = 0.0;
+    for (int i=0; i<11; i++) {
+        x_avg += velocities[i];
+        y_avg += kFFs[i];
+    }
+    x_avg /= 11;
+    y_avg /= 11;
+
+    float numerator_sum = 0.0, denominator_sum = 0.0;
+    for (int i=0; i<11; i++) {
+        numerator_sum += (velocities[i] - x_avg) * (kFFs[i] - y_avg);
+        denominator_sum += pow((velocities[i] - x_avg), 2.0);
+    }
+
+    Brain.Screen.clearScreen();
+    Brain.Screen.print(numerator_sum/denominator_sum); // Tuned kFF
 }
