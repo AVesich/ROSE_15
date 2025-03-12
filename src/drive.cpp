@@ -64,9 +64,12 @@ void tankDrive() {
 }
 
 // Motor Control, uses feed-forward + PID
-const float motor_kFS = 5.0; // Feedforward static is min speed to start moving
-const float motor_kFF = 0.3; // Feedforward constant provides a common speed boost required across all power levels
-const float motor_kP = 0.25;
+const float motor_straight_kFS = 6.0; // Feedforward static is min speed to start moving
+const float motor_turn_kFS = 10.5; // Feedforward static is min speed to start moving
+const float motor_straight_kFF = 0.9996; // Feedforward constant provides a common speed boost required across all power levels
+const float motor_turn_kFF = 1.0005; // Feedforward constant provides a common speed boost required across all power levels
+float motor_kFS, motor_kFF;
+const float motor_kP = 0.5;
 // motor_kI is omitted because it shouldn't be needed and total err would need a reset upon every new target speed to avoid tot_err reaching inf
 const float motor_kD = 0.1;
 motor* left_motors[DRIVE_MOTOR_SIDE_COUNT] = {&left1, &left2, &left3, &left4};
@@ -83,11 +86,14 @@ int motorControl(float* target, one_side_motors& motors) {
             continue; // Disable PID for driving
         }
 
+        motor_kFS = (drive_mode == STRAIGHT) ? motor_straight_kFS : motor_turn_kFS;
+        motor_kFF = (drive_mode == STRAIGHT) ? motor_straight_kFF : motor_turn_kFF;
+
         for (int i=0; i<DRIVE_MOTOR_SIDE_COUNT; i++) {
-            ff_baseline = motor_kFS + (*target)*motor_kFF;
+            ff_baseline = direction(*target)*motor_kFS + (*target)*motor_kFF;
             actual = (*motors[i]).velocity(percentUnits::pct);
             prev_error = error;
-            error = left_speed-actual;
+            error = (*target)-actual;
             speed_boost = motor_kP*error + motor_kD*prev_error;
     
             (*motors[i]).spin(fwd, 120*(ff_baseline+speed_boost), voltageUnits::mV);
@@ -153,8 +159,8 @@ float slewSpeed(float prevTargetSpeed, float targetSpeed) { // Limits accel + ma
 int straightPID() {
     const float kP = 0.1;
     const float kI = 0.0;
-    const float kD = 0.05;
-    const float kAlign = 3.0;
+    const float kD = 0.055;
+    const float kAlign = 2.0;
     
     float leftTicks = 0.0;      // Left current degrees of the robot
     float rightTicks = 0.0;     // Right current degrees of the robot
@@ -214,11 +220,19 @@ void drive(float targetDeg) {
 }
 
 // Turn
+float prev_turn_err = 0.0;
+float total_turn_err = 0.0;
+
+void flushTurnPID() {
+    prev_turn_err = 0.0;
+    total_turn_err = 0.0;
+}
+
 int turnPID() {
     // Find and init deg related attributes
-    const float kP = 0.0;
-    const float kI = 0.0;
-    const float kD = 0.0;
+    const float kP = 0.74;
+    const float kI = 0.0;//0.008;
+    const float kD = 0.89;
     float currAngleErr = getShortestAngleTo(reversed ? 360.0-turnTarget : turnTarget);
     float prevAngleErr = currAngleErr;
     float totAngleErr = 0.0;
@@ -227,10 +241,11 @@ int turnPID() {
         wait(20, msec);
         if (drive_mode != TURN) continue;
 
+        prevAngleErr = currAngleErr;
         currAngleErr = getShortestAngleTo(reversed ? 360.0-turnTarget : turnTarget);
         currAngleErr *= (reversed ? -1 : 1);
-        totAngleErr += prevAngleErr-currAngleErr;
-        prevAngleErr = currAngleErr;
+        if (totAngleErr < 90.0)
+            totAngleErr += prevAngleErr-currAngleErr;
 
         // Speed is equivalent to the left side's speed since it moves with the sign of the shortest angle
         prev_left_speed = left_speed;
@@ -240,11 +255,8 @@ int turnPID() {
         right_speed = -left_speed;
 
         if (slewEnabled) {
-            driveLeft(slewSpeed(prev_left_speed, left_speed));
-            driveRight(-slewSpeed(prev_right_speed, right_speed));
-        } else {
-            driveLeft(left_speed);
-            driveRight(right_speed);
+            left_speed = slewSpeed(prev_left_speed, left_speed);
+            right_speed = slewSpeed(prev_right_speed, right_speed);
         }
     }
 
@@ -254,6 +266,7 @@ int turnPID() {
 void turn(float targetHeading) {
     resetDrive();
     setBrake(hold);
+    flushTurnPID(); // Reset values (prev, total, etc.)
     setTurnTarget(targetHeading);
     wait(450, msec);
     while(!hasSettled()) wait(20, msec);
@@ -367,69 +380,71 @@ float getY() {
 }
 
 // Calibration
-void tuneMotorKFS() {
+void tuneMotorKFS(DriveMode mode) {
     const float thresh = 10.0;
     float speed = 0.0;
     float dist = 0.0;
 
     drive_mode = MANUAL;
+    resetDrive();
     while (dist < thresh) {
         speed += 0.5;
         dist = 0.0;
 
         driveLeft(speed);
-        driveRight(speed);
+        driveRight((mode == STRAIGHT) ? speed : -speed);
         wait(500, msec);
-        resetDrive();
+        stopDrive();
 
         dist = (left_group.position(rotationUnits::deg)+right_group.position(rotationUnits::deg))/2.0;
+        resetDrive();
     }
+    stopDrive();
+    resetDrive();
 
     Brain.Screen.clearScreen();
     Brain.Screen.print("Tuned motor kFS: %f", speed); // Tuned kFS
 }
 
 float leastSquareRegressionSlope(const float x_values[], const float y_values[], int num_values) {
-    float x_avg = 0.0, y_avg = 0.0;
+    float sum_x = 0.0, sum_y = 0.0, sum_xy = 0.0, sum_x_squared = 0.0;
+
     for (int i=0; i<num_values; i++) {
-        x_avg += x_values[i];
-        y_avg += y_values[i];
-    }
-    x_avg /= num_values;
-    y_avg /= num_values;
-
-    float numerator_sum = 0.0, denominator_sum = 0.0;
-    for (int i=0; i<11; i++) {
-        numerator_sum += (x_values[i] - x_avg) * (y_values[i] - y_avg);
-        denominator_sum += pow((x_values[i] - x_avg), 2.0);
+        sum_x += x_values[i];
+        sum_y += y_values[i];
+        sum_xy += x_values[i]*y_values[i];
+        sum_x_squared += pow(x_values[i], 2.0);
     }
 
-    return numerator_sum/denominator_sum;
+    return (num_values*sum_xy - sum_x*sum_y) / (num_values*sum_x_squared - pow(sum_x, 2.0));
 }
 
-void tuneMotorKFF() {
-    const float velocities[10] = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90}; // Stop at 90 since inability to reach perfect 100 will lead to driving forever
-    float kFFs[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// Tune kFF after tuning kFS; this uses kFS in it's calculation.
+void tuneMotorKFF(DriveMode mode) {
+    const float velocities[9] = {10, 20, 30, 40, 50, 60, 70, 80, 90}; // Stop at 90 since inability to reach perfect 100 will lead to driving forever
+    float kFFs[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     float speed = 0.0;
 
     drive_mode = MANUAL;
-    for (int i=0; i<11; i++) {
+    for (int i=0; i<9; i++) {
         speed = velocities[i] - 0.5;
 
         while ((left_group.velocity(percentUnits::pct) < velocities[i]) &&
                (right_group.velocity(percentUnits::pct) < velocities[i])) {
             speed += 0.5;
             driveLeft(speed);
-            driveRight(speed);
+            driveRight((mode == STRAIGHT) ? speed : -speed);
             wait(20, msec);
         }
         stopDrive();
 
-        kFFs[i] = speed/velocities[i];
-        wait(1000, msec);
+        // SECOND WARNING: TUNE kFS AND UPDATE THE motor_kFS VALUE BEFORE TUNING motor_kFF.
+        // actual_required_velo = kFS + (kFF * target_velo)
+        kFFs[i] = (speed - ((mode == STRAIGHT) ? motor_straight_kFS : motor_turn_kFS)) / velocities[i];
+        wait(3000, msec);
     }
 
     // Find slope of line of best fit for overall kFF using least square method
     Brain.Screen.clearScreen();
-    Brain.Screen.print("Tuned motor kFF: %f", leastSquareRegressionSlope(velocities, kFFs, 10)); // Tuned kFF
+    Brain.Screen.print("Tuned motor kFF: %f", 1.0 + leastSquareRegressionSlope(velocities, kFFs, 9)); // Tuned kFF
 }

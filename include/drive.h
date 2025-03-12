@@ -9,11 +9,11 @@
 #define WHEEL_DIAM  2.75 // Wheel diameter in inches
 #define MAX_SPEED   95.0 // Maximum speed for autonomous operation, 95 provides ceiling for side adjustment
 #define MIN_SPEED   5.0 // Minimum speed for autonomous operations
-#define TICKS_PER_DEG_K 2.3 // Constant for straight movements
+#define TICKS_PER_DEG_K 1.3 // Constant for straight movements
 #define IN          *(360.0/(WHEEL_DIAM * M_PI))*TICKS_PER_DEG_K // Inches conversion for going straight
-#define DRIVE_THRESH 4.0 // Maximium drive change to be considered "driving"
-#define TURN_THRESH 0.3 // Degree distance from turn target that can be defined as "done" turning
-#define MAX_SETTLE_COUNT 4 // The number of 20ms ticks that a threshold must be met to define the robot as "settled"
+#define DRIVE_THRESH 5.0 // Maximium drive change to be considered "driving"
+#define TURN_THRESH 0.35 // Degree distance from turn target that can be defined as "done" turning
+#define MAX_SETTLE_COUNT 6 // The number of 20ms ticks that a threshold must be met to define the robot as "settled"
 #define WHEEL_SPACING  // Space between the wheels in inches
 
 enum DriveMode {
@@ -36,6 +36,7 @@ void tankDrive();
 // NOTE: ALL PID-BASED AUTONOMOUS MOVEMENTS SHOULD AUTOMATICALLY FLIP FOR OTHER SIDE
 
 // PID autonomous
+int direction(float speed);
 int leftControl();
 int rightControl();
 // Straight
@@ -69,7 +70,7 @@ float getAngle();
 float getShortestAngleTo(float deg);
 
 // Calibration
-void tuneMotorKFS();
-void tuneMotorKFF();
+void tuneMotorKFS(DriveMode mode);
+void tuneMotorKFF(DriveMode mode);
 
 #endif
