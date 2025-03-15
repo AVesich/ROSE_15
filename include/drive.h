@@ -7,8 +7,9 @@
 #define DRIVE_MOTOR_SIDE_COUNT 4
 
 #define WHEEL_DIAM  2.75 // Wheel diameter in inches
+#define SIDE_DIST   12.0 // NECESSARY FOR ARCS; Distance between the left and right side wheels
 #define MAX_SPEED   95.0 // Maximum speed for autonomous operation, 95 provides ceiling for side adjustment
-#define MIN_SPEED   5.0 // Minimum speed for autonomous operations
+#define MIN_SPEED   5.0  // Minimum speed for autonomous operations
 #define TICKS_PER_DEG_K 1.3 // Constant for straight movements
 #define IN          *(360.0/(WHEEL_DIAM * M_PI))*TICKS_PER_DEG_K // Inches conversion for going straight
 #define DRIVE_THRESH 5.0 // Maximium drive change to be considered "driving"
@@ -17,8 +18,9 @@
 #define WHEEL_SPACING  // Space between the wheels in inches
 
 enum DriveMode {
-    STRAIGHT,
-    TURN,
+    STRAIGHT, // 0
+    TURN, // 1
+    ARC, // 2
     MANUAL // Used for special cases where we don't want the pid to be constantly running
 };
 
@@ -46,7 +48,7 @@ void drive(float targetDeg);
 int turnPID();
 void turn(float targetHeading);
 // Arc
-void arc(float radius, float deg);
+void arc(float radius_in, float deg);
 // SCurve
 void scurve(float xDist, float yDist); // The direction provided is the way it ends up offset horizontally
 

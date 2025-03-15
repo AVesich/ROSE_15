@@ -13,6 +13,7 @@ using namespace std;
 // Custom inclusions
 #include "robot-config.h"
 #include "deviceConfig.h"
+#include "pid.h"
 #include "drive.h"
 #include "intake.h"
 #include "hooks.h"

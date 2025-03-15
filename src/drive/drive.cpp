@@ -15,16 +15,20 @@ motor_group right_group = motor_group(right1, right2, right3, right4);
 // Sensors
 inertial imu = inertial(IMU);
 
+// PIDs
+PID straight_pid = PID(0.1, 0.0, 0.055, MAX_SPEED);
+PID turn_pid = PID(0.74, 0.0, 0.89, MAX_SPEED);
+PID left_arc_pid = PID(0.0, 0.0, 0.0, MAX_SPEED);
+PID right_arc_pid = PID(0.0, 0.0, 0.0, MAX_SPEED);
+
 // Utility vars
 bool reversed = false;
 DriveMode drive_mode = MANUAL;
 float max_speed = MAX_SPEED;
-float min_speed = MIN_SPEED;
 int settle_count = 0;
 float last_position = 0; // Most recent drive position, used purely in isSettled() and resetDrive()
 
 // Speed vars
-float prev_left_speed = 0.0, prev_right_speed = 0.0;
 float left_speed= 0.0, right_speed = 0.0;
 
 // Manual Control
@@ -70,7 +74,6 @@ const float motor_straight_kFF = 0.9996; // Feedforward constant provides a comm
 const float motor_turn_kFF = 1.0005; // Feedforward constant provides a common speed boost required across all power levels
 float motor_kFS, motor_kFF;
 const float motor_kP = 0.5;
-// motor_kI is omitted because it shouldn't be needed and total err would need a reset upon every new target speed to avoid tot_err reaching inf
 const float motor_kD = 0.1;
 motor* left_motors[DRIVE_MOTOR_SIDE_COUNT] = {&left1, &left2, &left3, &left4};
 motor* right_motors[DRIVE_MOTOR_SIDE_COUNT] = {&right1, &right2, &right3, &right4};
@@ -114,21 +117,38 @@ int rightControl() {
 // PID autonomous
 // NOTE: ALL PID-BASED AUTONOMOUS MOVEMENTS SHOULD AUTOMATICALLY FLIP FOR OTHER SIDE
 bool slewEnabled = false;
-float straightTarget = 0.0;
+float straight_target = 0.0;
 float holdAngle = 0.0;
 float turnTarget = 0.0;
+float arc_left_target = 0.0;
+float arc_right_target = 0.0;
 void setStraightTarget(float target) {
+    straight_pid.reset();
+
     drive_mode = STRAIGHT;
-    straightTarget = target;
+    straight_target = target;
     holdAngle = getAngle();
     settle_count = 0;
 }
 
 void setTurnTarget(float target) {
+    turn_pid.reset();
+
     drive_mode = TURN;
     turnTarget = target;
     settle_count = 0;
 }
+
+void setArcTarget(float left_target, float right_target) {
+    left_arc_pid.reset();
+    right_arc_pid.reset();
+
+    drive_mode = ARC;
+    arc_left_target = left_target;
+    arc_right_target = right_target;
+    settle_count = 0;
+}
+
 
 // Straight
 int direction(float speed) {
@@ -138,55 +158,20 @@ int direction(float speed) {
         return -1;
 }
 
-float clamp(float target, float min, float max) {
-    if (target <= min)
-        return min;
-    if (target >= max)
-        return max;
-    return target;
-}
-
-const int ACCEL_STEP = 9;
-float slewSpeed(float prevTargetSpeed, float targetSpeed) { // Limits accel + max speed    
-    if ((prevTargetSpeed < targetSpeed) && (prevTargetSpeed >= 0)) { // If accelerating
-        if ((targetSpeed - prevTargetSpeed) >= ACCEL_STEP) // Limit step to slew if accelerating too fast
-            targetSpeed = prevTargetSpeed+ACCEL_STEP;
-    }
-
-    return clamp(targetSpeed, min_speed, max_speed);
-}
 
 int straightPID() {
-    const float kP = 0.1;
-    const float kI = 0.0;
-    const float kD = 0.055;
-    const float kAlign = 2.0;
-    
-    float leftTicks = 0.0;      // Left current degrees of the robot
-    float rightTicks = 0.0;     // Right current degrees of the robot
-    float currErr;
-    float prevErr;
-    float totalErr = 0.0;
+    const float kA = 2.0;
+
+    float ticks;
     float angle_error;
 
     while(1) {
         wait(20, msec);
         if (drive_mode != STRAIGHT) continue;
 
-        // Update the degrees
-        leftTicks = leftDeg();
-        rightTicks = rightDeg();
-        float avgTicks = (leftTicks + rightTicks)/2;
-        prevErr = currErr;
-        currErr = straightTarget - avgTicks;
-        totalErr += (prevErr-currErr);
-            
-        // Store prev speeds
-        prev_left_speed = left_speed;
-        prev_right_speed = right_speed;
-        
-        // Speed is based on proportional distance from target, total distance traveled (boost via integral), and the rate of change in speed (decel via derivative)
-        left_speed = kP*currErr + kI*totalErr + kD*(currErr-prevErr);
+        ticks = (leftDeg() + rightDeg())/2;
+
+        left_speed = straight_pid.computeValue(straight_target-ticks);
         right_speed = left_speed;
                 
         // Adjust sides if necessary
@@ -194,18 +179,10 @@ int straightPID() {
         // This prevents the issue of telling the drive to go at max speed and thus, the slower side being unable to speed up.
         angle_error = getShortestAngleTo(holdAngle);
         if (angle_error > TURN_THRESH) { // Drifted to the left
-            right_speed -= (angle_error * kAlign);
+            right_speed -= (angle_error * kA);
         } else if (angle_error < -TURN_THRESH) { // Drifted to the right
-            left_speed -= (fabs(angle_error) * kAlign);
+            left_speed -= (fabs(angle_error) * kA);
         }
-
-        if (slewEnabled) {
-            left_speed = slewSpeed(prev_left_speed, left_speed);
-            right_speed = slewSpeed(prev_right_speed, right_speed);
-        }
-
-        Brain.Screen.print(left_speed);
-        Brain.Screen.print(right_speed);
     }
 
     return 0;
@@ -229,35 +206,17 @@ void flushTurnPID() {
 }
 
 int turnPID() {
-    // Find and init deg related attributes
-    const float kP = 0.74;
-    const float kI = 0.0;//0.008;
-    const float kD = 0.89;
     float currAngleErr = getShortestAngleTo(reversed ? 360.0-turnTarget : turnTarget);
-    float prevAngleErr = currAngleErr;
-    float totAngleErr = 0.0;
 
     while(1) {
         wait(20, msec);
         if (drive_mode != TURN) continue;
 
-        prevAngleErr = currAngleErr;
         currAngleErr = getShortestAngleTo(reversed ? 360.0-turnTarget : turnTarget);
         currAngleErr *= (reversed ? -1 : 1);
-        if (totAngleErr < 90.0)
-            totAngleErr += prevAngleErr-currAngleErr;
 
-        // Speed is equivalent to the left side's speed since it moves with the sign of the shortest angle
-        prev_left_speed = left_speed;
-        prev_right_speed = right_speed;
-
-        left_speed = kP*currAngleErr + kI*totAngleErr + kD*(currAngleErr-prevAngleErr);
+        left_speed = turn_pid.computeValue(currAngleErr);
         right_speed = -left_speed;
-
-        if (slewEnabled) {
-            left_speed = slewSpeed(prev_left_speed, left_speed);
-            right_speed = slewSpeed(prev_right_speed, right_speed);
-        }
     }
 
     return 0;
@@ -273,8 +232,37 @@ void turn(float targetHeading) {
 }
 
 // Arc
-void arc(float radius, float deg) {
+int arcPID() {
+    while(1) {
+        wait(20, msec);
+        if (drive_mode != ARC) continue;
 
+        // Speed is based on proportional distance from target, total distance traveled (boost via integral), and the rate of change in speed (decel via derivative)
+        left_speed = left_arc_pid.computeValue(arc_left_target-leftDeg());
+        right_speed = right_arc_pid.computeValue(arc_right_target-rightDeg());
+    }
+
+    return 0;
+}
+
+void arc(float radius_in, float deg, char direction) {
+    // NOTE: angle/360 = arc length/circumference
+    // NOTE: circumference = 2*M_PI*radius
+    float circ = 2.0 * M_PI * radius_in;
+    float inner_dist = circ * deg / 360.0;
+    float outer_dist = inner_dist + SIDE_DIST;
+
+    resetDrive();
+    setBrake(hold);
+
+    if (direction == 'l') {
+        setArcTarget(inner_dist, outer_dist);
+    } else if (direction == 'r') {
+        setArcTarget(outer_dist, inner_dist);
+    }
+
+    wait(450, msec);
+    while(!hasSettled()) wait(20, msec);
 }
 
 // SCurve // The direction provided is the way it ends up offset horizontally
@@ -301,7 +289,7 @@ void reverse() {
 
 void resetDrive() {
     drive_mode = MANUAL; // Prevent target resets from making the bot move
-    straightTarget = 0;
+    straight_target = 0;
     holdAngle = getAngle();
     turnTarget = getAngle(); // target == where we currently are
     last_position = 0; // Used for stopping
@@ -312,9 +300,7 @@ void resetDrive() {
 
 void stopDrive() {
     left_speed = 0;
-    prev_left_speed = 0;
     right_speed = 0;
-    prev_right_speed = 0;
     left_group.stop();
     right_group.stop();
 }
@@ -332,7 +318,7 @@ void setBrake(brakeType mode) {
 bool hasSettled()  {
     float curr_position;
 
-    if (drive_mode == STRAIGHT) {
+    if (drive_mode == STRAIGHT || drive_mode == ARC) {
         curr_position = leftDeg();
         
         if (fabs(last_position-curr_position) < DRIVE_THRESH)
