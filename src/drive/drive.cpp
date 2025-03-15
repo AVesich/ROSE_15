@@ -73,15 +73,14 @@ const float motor_turn_kFS = 10.5; // Feedforward static is min speed to start m
 const float motor_straight_kFF = 0.9996; // Feedforward constant provides a common speed boost required across all power levels
 const float motor_turn_kFF = 1.0005; // Feedforward constant provides a common speed boost required across all power levels
 float motor_kFS, motor_kFF;
-const float motor_kP = 0.5;
-const float motor_kD = 0.1;
 motor* left_motors[DRIVE_MOTOR_SIDE_COUNT] = {&left1, &left2, &left3, &left4};
 motor* right_motors[DRIVE_MOTOR_SIDE_COUNT] = {&right1, &right2, &right3, &right4};
 
 using one_side_motors = motor*[DRIVE_MOTOR_SIDE_COUNT];
 int motorControl(float* target, one_side_motors& motors) {
     float error = 0;
-    float ff_baseline, actual, prev_error, speed_boost;
+    float ff_baseline, actual, speed_boost;
+    PID pid = PID(0.5, 0.0, 0.1, 127.0, false);
 
     while(1) {
         wait(20, msec);
@@ -95,9 +94,8 @@ int motorControl(float* target, one_side_motors& motors) {
         for (int i=0; i<DRIVE_MOTOR_SIDE_COUNT; i++) {
             ff_baseline = direction(*target)*motor_kFS + (*target)*motor_kFF;
             actual = (*motors[i]).velocity(percentUnits::pct);
-            prev_error = error;
             error = (*target)-actual;
-            speed_boost = motor_kP*error + motor_kD*prev_error;
+            speed_boost = pid.computeValue(error);
     
             (*motors[i]).spin(fwd, 120*(ff_baseline+speed_boost), voltageUnits::mV);
         }
